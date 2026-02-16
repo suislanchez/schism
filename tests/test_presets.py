@@ -1,18 +1,15 @@
 """Tests for the preset system."""
 
 import json
-import tempfile
-from pathlib import Path
 
 import pytest
 
 from schism.presets.manager import (
-    list_presets,
-    get_preset,
-    save_preset,
     delete_preset,
+    get_preset,
     import_preset,
-    PRESETS_DIR,
+    list_presets,
+    save_preset,
 )
 
 
@@ -82,10 +79,12 @@ def test_save_preset_invalid():
 
 
 def test_delete_preset(clean_user_presets):
-    save_preset({
-        "name": "Deletable",
-        "sliders": {"humor": 0.9},
-    })
+    save_preset(
+        {
+            "name": "Deletable",
+            "sliders": {"humor": 0.9},
+        }
+    )
     assert get_preset("Deletable") is not None
 
     success = delete_preset("Deletable")

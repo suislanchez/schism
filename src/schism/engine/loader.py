@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import torch
 from pathlib import Path
 from typing import Optional
+
+import torch
 
 SCHISM_HOME = Path.home() / ".schism"
 MODELS_DIR = SCHISM_HOME / "models"
@@ -80,9 +81,7 @@ def load_model(
 
     if model_name not in MODEL_REGISTRY:
         available = ", ".join(MODEL_REGISTRY.keys())
-        raise ValueError(
-            f"Unknown model: '{model_name}'. Available models: {available}"
-        )
+        raise ValueError(f"Unknown model: '{model_name}'. Available models: {available}")
 
     ensure_dirs()
     config = MODEL_REGISTRY[model_name]
@@ -139,6 +138,7 @@ def load_model(
         except Exception as e:
             # SAE is optional - warn but don't fail
             import warnings
+
             warnings.warn(
                 f"Failed to load SAE for {model_name}: {e}. "
                 f"Falling back to contrastive steering (no SAE)."
@@ -182,10 +182,12 @@ def list_available_models() -> list[dict]:
     """List all models with their download/load status."""
     results = []
     for name, config in MODEL_REGISTRY.items():
-        results.append({
-            "name": name,
-            "hf_id": config["hf_id"],
-            "has_sae": config["has_sae"],
-            "loaded": name in _loaded_models,
-        })
+        results.append(
+            {
+                "name": name,
+                "hf_id": config["hf_id"],
+                "has_sae": config["has_sae"],
+                "loaded": name in _loaded_models,
+            }
+        )
     return results

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import json
-import torch
 import hashlib
+import json
 from contextlib import contextmanager
-from pathlib import Path
 from typing import Optional
+
+import torch
 
 from schism.engine.loader import VECTORS_DIR, ensure_dirs
 
@@ -131,14 +131,21 @@ def extract_steering_vector(
     """Extract a steering vector, using SAE if available, else contrastive."""
     if sae is not None:
         return extract_steering_vector_sae(
-            model, tokenizer, sae,
-            positive_prompts, negative_prompts,
-            layer_idx, device,
+            model,
+            tokenizer,
+            sae,
+            positive_prompts,
+            negative_prompts,
+            layer_idx,
+            device,
         )
     return extract_steering_vector_contrastive(
-        model, tokenizer,
-        positive_prompts, negative_prompts,
-        layer_idx, device,
+        model,
+        tokenizer,
+        positive_prompts,
+        negative_prompts,
+        layer_idx,
+        device,
     )
 
 
@@ -189,12 +196,15 @@ def _vector_cache_key(
     negative_prompts: list[str],
 ) -> str:
     """Generate a deterministic cache key for a steering vector."""
-    data = json.dumps({
-        "model": model_name,
-        "feature": feature_name,
-        "positive": sorted(positive_prompts),
-        "negative": sorted(negative_prompts),
-    }, sort_keys=True)
+    data = json.dumps(
+        {
+            "model": model_name,
+            "feature": feature_name,
+            "positive": sorted(positive_prompts),
+            "negative": sorted(negative_prompts),
+        },
+        sort_keys=True,
+    )
     return hashlib.sha256(data.encode()).hexdigest()[:16]
 
 

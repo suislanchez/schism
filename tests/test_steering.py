@@ -1,18 +1,16 @@
 """Tests for the steering engine (unit tests with mocked models)."""
 
-import torch
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import MagicMock, patch
+import torch
 
 from schism.engine.steering import (
-    extract_activations,
-    extract_steering_vector_contrastive,
-    apply_steering,
     _vector_cache_key,
-    save_vector,
+    apply_steering,
     load_cached_vector,
+    save_vector,
 )
-from schism.engine.loader import VECTORS_DIR
 
 
 @pytest.fixture(autouse=True)
@@ -95,9 +93,7 @@ def test_apply_steering_context_manager():
 
     layer = model.model.layers[12]
     with apply_steering(model, [(vec, 0.5)], layer_idx=12):
-        assert layer.register_forward_hook.called
-
-    # Hook handle.remove should have been called on exit
+        assert len(layer._hooks) > 0
 
 
 def test_apply_steering_empty_vectors():
@@ -114,4 +110,4 @@ def test_apply_steering_multiple_vectors():
     vec2 = torch.randn(256)
 
     with apply_steering(model, [(vec1, 0.3), (vec2, 0.7)], layer_idx=12):
-        assert model.model.layers[12].register_forward_hook.called
+        assert len(model.model.layers[12]._hooks) > 0

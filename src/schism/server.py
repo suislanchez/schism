@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
-import json
 import asyncio
+import json
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from schism.engine.features import get_all_features
+from schism.engine.generate import generate_comparison, generate_stream
 from schism.engine.loader import list_available_models, load_model
-from schism.engine.features import get_all_features, get_feature_names
-from schism.engine.generate import generate_stream, generate_comparison
-from schism.presets.manager import list_presets, get_preset, save_preset, delete_preset
+from schism.presets.manager import delete_preset, list_presets, save_preset
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -116,36 +116,46 @@ async def ws_generate(websocket: WebSocket):
             try:
                 if compare:
                     async for chunk in generate_comparison(
-                        model_name, prompt, sliders,
+                        model_name,
+                        prompt,
+                        sliders,
                         max_tokens=max_tokens,
                         temperature=temperature,
                     ):
-                        await websocket.send_json({
-                            "type": "token",
-                            "token": chunk["token"],
-                            "side": chunk["side"],
-                        })
+                        await websocket.send_json(
+                            {
+                                "type": "token",
+                                "token": chunk["token"],
+                                "side": chunk["side"],
+                            }
+                        )
                         await asyncio.sleep(0)  # yield control
                 else:
                     async for token in generate_stream(
-                        model_name, prompt, sliders,
+                        model_name,
+                        prompt,
+                        sliders,
                         max_tokens=max_tokens,
                         temperature=temperature,
                     ):
-                        await websocket.send_json({
-                            "type": "token",
-                            "token": token,
-                            "side": "steered",
-                        })
+                        await websocket.send_json(
+                            {
+                                "type": "token",
+                                "token": token,
+                                "side": "steered",
+                            }
+                        )
                         await asyncio.sleep(0)
 
                 await websocket.send_json({"type": "done"})
 
             except Exception as e:
-                await websocket.send_json({
-                    "type": "error",
-                    "error": str(e),
-                })
+                await websocket.send_json(
+                    {
+                        "type": "error",
+                        "error": str(e),
+                    }
+                )
 
     except WebSocketDisconnect:
         pass

@@ -2,18 +2,19 @@
 
 from __future__ import annotations
 
-import torch
-from typing import AsyncIterator, Optional
+from typing import AsyncIterator
 
-from schism.engine.loader import load_model, MODEL_REGISTRY
+import torch
+
+from schism.engine.features import get_all_features
+from schism.engine.loader import load_model
 from schism.engine.steering import (
+    _vector_cache_key,
     apply_steering,
     extract_steering_vector,
     load_cached_vector,
     save_vector,
-    _vector_cache_key,
 )
-from schism.engine.features import get_all_features
 
 
 def _get_or_compute_vector(
@@ -28,8 +29,10 @@ def _get_or_compute_vector(
 
     feature = features[feature_name]
     cache_key = _vector_cache_key(
-        model_name, feature_name,
-        feature["positive"], feature["negative"],
+        model_name,
+        feature_name,
+        feature["positive"],
+        feature["negative"],
     )
 
     # Try cache first

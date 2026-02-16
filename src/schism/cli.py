@@ -6,12 +6,10 @@ import webbrowser
 from typing import Optional
 
 import typer
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
 from rich.columns import Columns
-from rich.live import Live
-from rich.text import Text
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 
 app = typer.Typer(
     name="schism",
@@ -43,12 +41,14 @@ def serve(
     """Launch the Schism web UI."""
     import uvicorn
 
-    console.print(Panel.fit(
-        "[bold]SCHISM[/bold]\n"
-        f"[dim]Reshape how AI thinks, one slider at a time.[/dim]\n\n"
-        f"Open [bold cyan]http://{host}:{port}[/bold cyan] in your browser",
-        border_style="bright_magenta",
-    ))
+    console.print(
+        Panel.fit(
+            "[bold]SCHISM[/bold]\n"
+            f"[dim]Reshape how AI thinks, one slider at a time.[/dim]\n\n"
+            f"Open [bold cyan]http://{host}:{port}[/bold cyan] in your browser",
+            border_style="bright_magenta",
+        )
+    )
 
     if not no_browser:
         webbrowser.open(f"http://{host}:{port}")
@@ -157,10 +157,14 @@ def compare(
 
     # Display side by side
     console.print()
-    console.print(Columns([
-        Panel(vanilla, title="[bold]Vanilla[/bold]", border_style="blue", width=50),
-        Panel(steered, title="[bold]Steered[/bold]", border_style="green", width=50),
-    ]))
+    console.print(
+        Columns(
+            [
+                Panel(vanilla, title="[bold]Vanilla[/bold]", border_style="blue", width=50),
+                Panel(steered, title="[bold]Steered[/bold]", border_style="green", width=50),
+            ]
+        )
+    )
 
 
 @app.command()
@@ -168,7 +172,7 @@ def download(
     model: str = typer.Argument(..., help="Model to download (e.g. gemma-2-2b)"),
 ):
     """Download a model and its SAE weights."""
-    from schism.engine.loader import load_model, MODEL_REGISTRY
+    from schism.engine.loader import MODEL_REGISTRY, load_model
 
     if model not in MODEL_REGISTRY:
         console.print(f"[red]Unknown model: {model}[/red]")
@@ -203,9 +207,9 @@ def warmup(
     This makes the first generation fast by computing all default
     steering vectors upfront.
     """
-    from schism.engine.loader import load_model, MODEL_REGISTRY
     from schism.engine.features import get_all_features
     from schism.engine.generate import _get_or_compute_vector
+    from schism.engine.loader import MODEL_REGISTRY, load_model
 
     if model not in MODEL_REGISTRY:
         console.print(f"[red]Unknown model: {model}[/red]")
@@ -275,6 +279,7 @@ def presets_export(
 ):
     """Export a preset to a JSON file for sharing."""
     import json
+
     from schism.presets.manager import get_preset
 
     preset = get_preset(name)
@@ -330,19 +335,21 @@ def presets_show(name: str = typer.Argument(..., help="Preset name")):
         console.print(f"[red]Preset '{name}' not found[/red]")
         raise typer.Exit(1)
 
-    console.print(Panel.fit(
-        f"[bold]{preset['name']}[/bold]\n"
-        f"[dim]{preset.get('description', '')}[/dim]\n"
-        f"Model: {preset.get('model', 'any')}\n",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel.fit(
+            f"[bold]{preset['name']}[/bold]\n"
+            f"[dim]{preset.get('description', '')}[/dim]\n"
+            f"Model: {preset.get('model', 'any')}\n",
+            border_style="cyan",
+        )
+    )
 
     for feature, value in preset["sliders"].items():
         bar_width = 20
-        center = bar_width // 2
+        bar_width // 2
         filled = int((value + 1) / 2 * bar_width)
         bar = "░" * bar_width
-        bar = bar[:filled] + "█" + bar[filled + 1:]
+        bar = bar[:filled] + "█" + bar[filled + 1 :]
         color = "green" if value > 0 else "red" if value < 0 else "dim"
         console.print(f"  {feature:>12s}  [{color}]{bar}[/{color}]  {value:+.1f}")
 
@@ -353,7 +360,7 @@ def presets_show(name: str = typer.Argument(..., help="Preset name")):
 @features_app.command("list")
 def features_list():
     """List all available steering features (slider dimensions)."""
-    from schism.engine.features import get_all_features, DEFAULT_FEATURES, load_custom_features
+    from schism.engine.features import DEFAULT_FEATURES, load_custom_features
 
     table = Table(title="Steering Features")
     table.add_column("Name", style="bold cyan")
@@ -384,7 +391,7 @@ def features_create(
     and negative prompts (behavior you want LESS of). At least 3 of each
     are recommended for good results.
     """
-    from schism.engine.features import save_custom_feature, get_feature_info
+    from schism.engine.features import get_feature_info, save_custom_feature
 
     # Check if already exists
     if get_feature_info(name):
@@ -395,7 +402,9 @@ def features_create(
 
     # Collect positive prompts
     console.print("[green]Positive prompts[/green] (behavior you want MORE of)")
-    console.print("[dim]Enter one prompt per line. Empty line to finish. Min 3 recommended.[/dim]\n")
+    console.print(
+        "[dim]Enter one prompt per line. Empty line to finish. Min 3 recommended.[/dim]\n"
+    )
 
     positive = []
     while True:
@@ -413,8 +422,10 @@ def features_create(
         raise typer.Exit(1)
 
     # Collect negative prompts
-    console.print(f"\n[red]Negative prompts[/red] (behavior you want LESS of)")
-    console.print("[dim]Enter one prompt per line. Empty line to finish. Min 3 recommended.[/dim]\n")
+    console.print("\n[red]Negative prompts[/red] (behavior you want LESS of)")
+    console.print(
+        "[dim]Enter one prompt per line. Empty line to finish. Min 3 recommended.[/dim]\n"
+    )
 
     negative = []
     while True:
@@ -441,7 +452,9 @@ def features_create(
 
     console.print(f"\n[green]Feature '{name}' created![/green]")
     console.print(f"  {len(positive)} positive prompts, {len(negative)} negative prompts")
-    console.print(f"[dim]It will now appear as a slider in the web UI and can be used in presets.[/dim]")
+    console.print(
+        "[dim]It will now appear as a slider in the web UI and can be used in presets.[/dim]"
+    )
 
 
 @features_app.command("delete")
@@ -478,11 +491,12 @@ def features_show(
         raise typer.Exit(1)
 
     feat = features[name]
-    console.print(Panel.fit(
-        f"[bold]{name}[/bold]\n"
-        f"[dim]{feat['description']}[/dim]",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel.fit(
+            f"[bold]{name}[/bold]\n[dim]{feat['description']}[/dim]",
+            border_style="cyan",
+        )
+    )
 
     console.print("\n[green]Positive prompts (more of this):[/green]")
     for i, p in enumerate(feat["positive"], 1):

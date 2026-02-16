@@ -1,18 +1,16 @@
 """Tests for the feature system."""
 
-import json
 import pytest
 
 from schism.engine.features import (
-    get_default_features,
-    get_feature_names,
-    get_feature_info,
-    get_all_features,
-    save_custom_feature,
-    load_custom_features,
     DEFAULT_FEATURES,
+    get_all_features,
+    get_default_features,
+    get_feature_info,
+    get_feature_names,
+    load_custom_features,
+    save_custom_feature,
 )
-from schism.engine.loader import FEATURES_DIR
 
 
 @pytest.fixture(autouse=True)
@@ -26,7 +24,15 @@ def clean_features(tmp_path, monkeypatch):
 
 def test_default_features_exist():
     features = get_default_features()
-    expected = {"creativity", "formality", "humor", "confidence", "verbosity", "empathy", "technical"}
+    expected = {
+        "creativity",
+        "formality",
+        "humor",
+        "confidence",
+        "verbosity",
+        "empathy",
+        "technical",
+    }
     assert expected == set(features.keys())
 
 

@@ -1,9 +1,8 @@
 """Tests for the FastAPI server endpoints."""
 
-import json
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from schism.server import app
@@ -54,11 +53,14 @@ def test_api_presets_create(client, tmp_path, monkeypatch):
     test_presets.mkdir()
     monkeypatch.setattr("schism.presets.manager.PRESETS_DIR", test_presets)
 
-    resp = client.post("/api/presets", json={
-        "name": "Test API Preset",
-        "description": "Created via API",
-        "sliders": {"humor": 0.5},
-    })
+    resp = client.post(
+        "/api/presets",
+        json={
+            "name": "Test API Preset",
+            "description": "Created via API",
+            "sliders": {"humor": 0.5},
+        },
+    )
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
 
