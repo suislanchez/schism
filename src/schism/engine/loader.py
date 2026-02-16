@@ -61,8 +61,17 @@ def ensure_dirs():
         d.mkdir(parents=True, exist_ok=True)
 
 
-def load_model(model_name: str, device: Optional[str] = None) -> dict:
+def load_model(
+    model_name: str,
+    device: Optional[str] = None,
+    on_progress: Optional[callable] = None,
+) -> dict:
     """Load a model and its tokenizer. Returns cached if already loaded.
+
+    Args:
+        model_name: Name from MODEL_REGISTRY
+        device: Force a specific device (auto-detected if None)
+        on_progress: Optional callback(stage: str, detail: str) for progress updates
 
     Returns dict with keys: model, tokenizer, config, device, sae (or None)
     """
@@ -70,33 +79,72 @@ def load_model(model_name: str, device: Optional[str] = None) -> dict:
         return _loaded_models[model_name]
 
     if model_name not in MODEL_REGISTRY:
+        available = ", ".join(MODEL_REGISTRY.keys())
         raise ValueError(
-            f"Unknown model: {model_name}. "
-            f"Available: {list(MODEL_REGISTRY.keys())}"
+            f"Unknown model: '{model_name}'. Available models: {available}"
         )
 
     ensure_dirs()
     config = MODEL_REGISTRY[model_name]
     device = device or get_device()
 
+    def _progress(stage, detail=""):
+        if on_progress:
+            on_progress(stage, detail)
+
+    _progress("tokenizer", f"Loading tokenizer for {config['hf_id']}")
+
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    tokenizer = AutoTokenizer.from_pretrained(config["hf_id"])
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(config["hf_id"])
+    except OSError as e:
+        raise RuntimeError(
+            f"Failed to load tokenizer for '{model_name}'. "
+            f"Make sure you have internet access and the model ID '{config['hf_id']}' is correct. "
+            f"For gated models (like Llama), run: huggingface-cli login\n"
+            f"Original error: {e}"
+        ) from e
+
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model = AutoModelForCausalLM.from_pretrained(
-        config["hf_id"],
-        torch_dtype=torch.float32,  # MPS requires FP32
-        device_map=device if device == "cuda" else None,
-    )
+    _progress("model", f"Loading model weights for {config['hf_id']} (this may take a few minutes)")
+
+    try:
+        model = AutoModelForCausalLM.from_pretrained(
+            config["hf_id"],
+            torch_dtype=torch.float32,  # MPS requires FP32
+            device_map=device if device == "cuda" else None,
+        )
+    except OSError as e:
+        raise RuntimeError(
+            f"Failed to load model '{model_name}'. "
+            f"For gated models (like Llama), you need to:\n"
+            f"  1. Accept the license at https://huggingface.co/{config['hf_id']}\n"
+            f"  2. Run: huggingface-cli login\n"
+            f"Original error: {e}"
+        ) from e
+
     if device != "cuda":
+        _progress("device", f"Moving model to {device}")
         model = model.to(device)
     model.eval()
 
     sae = None
     if config["has_sae"] and config["sae_release"]:
-        sae = load_sae(config["sae_release"], config["sae_id"], device)
+        _progress("sae", f"Loading SAE: {config['sae_release']}")
+        try:
+            sae = load_sae(config["sae_release"], config["sae_id"], device)
+        except Exception as e:
+            # SAE is optional - warn but don't fail
+            import warnings
+            warnings.warn(
+                f"Failed to load SAE for {model_name}: {e}. "
+                f"Falling back to contrastive steering (no SAE)."
+            )
+
+    _progress("done", "Model ready")
 
     result = {
         "model": model,

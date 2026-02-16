@@ -175,10 +175,63 @@ def download(
     console.print(f"[bold]Downloading {model}...[/bold]")
     console.print("[dim]This may take a while on first run.[/dim]")
 
-    with console.status(f"Loading {model}..."):
-        load_model(model)
+    status = console.status(f"Loading {model}...")
+    status.start()
 
-    console.print(f"[green]Model {model} is ready![/green]")
+    def on_progress(stage, detail):
+        status.update(f"[{stage}] {detail}")
+
+    try:
+        load_model(model, on_progress=on_progress)
+        status.stop()
+        console.print(f"[green]Model {model} is ready![/green]")
+    except RuntimeError as e:
+        status.stop()
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+
+@app.command()
+def warmup(
+    model: str = typer.Argument(..., help="Model to warm up (e.g. gemma-2-2b)"),
+):
+    """Pre-compute and cache all steering vectors for a model.
+
+    This makes the first generation fast by computing all default
+    steering vectors upfront.
+    """
+    from schism.engine.loader import load_model, MODEL_REGISTRY
+    from schism.engine.features import get_all_features
+    from schism.engine.generate import _get_or_compute_vector
+
+    if model not in MODEL_REGISTRY:
+        console.print(f"[red]Unknown model: {model}[/red]")
+        console.print(f"Available: {', '.join(MODEL_REGISTRY.keys())}")
+        raise typer.Exit(1)
+
+    console.print(f"[bold]Warming up {model}...[/bold]")
+
+    status = console.status(f"Loading {model}...")
+    status.start()
+
+    try:
+        model_data = load_model(model, on_progress=lambda s, d: status.update(f"[{s}] {d}"))
+    except RuntimeError as e:
+        status.stop()
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+    status.stop()
+
+    features = get_all_features()
+    total = len(features)
+
+    for i, name in enumerate(sorted(features.keys()), 1):
+        console.print(f"  [{i}/{total}] Computing steering vector for [cyan]{name}[/cyan]...")
+        _get_or_compute_vector(model, name, model_data)
+
+    console.print(f"\n[green]All {total} steering vectors cached for {model}![/green]")
+    console.print("[dim]Subsequent generations will be much faster.[/dim]")
 
 
 # --- Preset subcommands ---

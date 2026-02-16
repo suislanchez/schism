@@ -29,6 +29,12 @@ async def index():
     return FileResponse(STATIC_DIR / "index.html")
 
 
+@app.get("/api/health")
+async def api_health():
+    """Health check endpoint."""
+    return {"status": "ok", "version": "0.1.0"}
+
+
 @app.get("/api/models")
 async def api_models():
     return list_available_models()
