@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schism</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <div>
+                <div class="logo">Schism</div>
+                <div class="logo-tagline">reshape how AI thinks</div>
+            </div>
+        </div>
+        <div class="header-controls">
+            <div id="status-dot" class="status-dot"></div>
+            <select id="model-select" class="model-select">
+                <option value="gemma-2-2b">gemma-2-2b</option>
+            </select>
+        </div>
+    </header>
+
+    <!-- Main Layout -->
+    <div class="main">
+
+        <!-- Sidebar: Sliders -->
+        <aside class="sidebar">
+            <div class="sidebar-title">Personality Sliders</div>
+
+            <!-- Sliders get injected here by sliders.js -->
+
+            <div class="preset-bar">
+                <div class="sidebar-title">Presets</div>
+                <select id="preset-select" class="preset-select">
+                    <option value="">-- Select Preset --</option>
+                </select>
+                <div class="preset-buttons">
+                    <button id="save-preset-btn" class="btn btn-sm" style="flex:1">Save</button>
+                    <button id="reset-btn" class="btn btn-sm" style="flex:1">Reset</button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Content: Prompt + Output -->
+        <main class="content">
+
+            <!-- Prompt -->
+            <div class="prompt-area">
+                <textarea
+                    id="prompt-input"
+                    class="prompt-input"
+                    placeholder="Type your prompt here... (Ctrl+Enter to generate)"
+                    rows="3"
+                ></textarea>
+
+                <div class="prompt-controls">
+                    <div class="prompt-controls-left">
+                        <button id="generate-btn" class="btn btn-primary">Generate</button>
+
+                        <label class="toggle-label">
+                            <div id="compare-toggle" class="toggle"></div>
+                            Compare Mode
+                        </label>
+                    </div>
+                    <div class="prompt-controls-right">
+                        <span class="param-label">temp</span>
+                        <input id="temp-input" class="param-input" type="number" value="0.7" min="0" max="2" step="0.1">
+                        <span class="param-label">tokens</span>
+                        <input id="max-tokens-input" class="param-input" type="number" value="256" min="1" max="2048" step="32" style="width:60px">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Output -->
+            <div id="output-area" class="output-area">
+                <!-- Steered Panel (always visible) -->
+                <div class="output-panel">
+                    <div class="output-header steered">
+                        <span>Steered Output</span>
+                    </div>
+                    <div id="steered-body" class="output-body empty">
+                        Adjust sliders and generate to see steered output
+                    </div>
+                </div>
+
+                <!-- Vanilla Panel (visible in compare mode) -->
+                <div id="vanilla-panel" class="output-panel">
+                    <div class="output-header vanilla">
+                        <span>Vanilla Output</span>
+                    </div>
+                    <div id="vanilla-body" class="output-body empty">
+                        Original unsteered output will appear here
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Save Preset Modal -->
+    <div id="modal-overlay" class="modal-overlay">
+        <div class="modal">
+            <h3>Save Preset</h3>
+            <input id="modal-name" class="modal-input" type="text" placeholder="Preset name (e.g. Sarcastic Professor)">
+            <input id="modal-desc" class="modal-input" type="text" placeholder="Description (optional)">
+            <div class="modal-actions">
+                <button id="modal-cancel" class="btn btn-sm">Cancel</button>
+                <button id="modal-save" class="btn btn-sm btn-primary">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Drag & Drop Zone -->
+    <div id="drop-zone" class="drop-zone">
+        Drop preset .json file here
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="/static/js/stream.js"></script>
+    <script src="/static/js/sliders.js"></script>
+    <script src="/static/js/app.js"></script>
+
+</body>
+</html>

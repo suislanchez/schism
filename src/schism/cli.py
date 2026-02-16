@@ -1,0 +1,243 @@
+"""Schism CLI - reshape how AI thinks, one slider at a time."""
+
+from __future__ import annotations
+
+import webbrowser
+from typing import Optional
+
+import typer
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich.columns import Columns
+from rich.live import Live
+from rich.text import Text
+
+app = typer.Typer(
+    name="schism",
+    help="Reshape how AI thinks, one slider at a time.",
+    no_args_is_help=False,
+)
+console = Console()
+
+presets_app = typer.Typer(help="Manage personality presets")
+app.add_typer(presets_app, name="presets")
+
+
+@app.callback(invoke_without_command=True)
+def default(ctx: typer.Context):
+    """Launch the Schism web UI (default command)."""
+    if ctx.invoked_subcommand is None:
+        serve()
+
+
+@app.command()
+def serve(
+    host: str = typer.Option("127.0.0.1", help="Host to bind to"),
+    port: int = typer.Option(6660, help="Port to bind to"),
+    no_browser: bool = typer.Option(False, help="Don't auto-open browser"),
+):
+    """Launch the Schism web UI."""
+    import uvicorn
+
+    console.print(Panel.fit(
+        "[bold]SCHISM[/bold]\n"
+        f"[dim]Reshape how AI thinks, one slider at a time.[/dim]\n\n"
+        f"Open [bold cyan]http://{host}:{port}[/bold cyan] in your browser",
+        border_style="bright_magenta",
+    ))
+
+    if not no_browser:
+        webbrowser.open(f"http://{host}:{port}")
+
+    uvicorn.run(
+        "schism.server:app",
+        host=host,
+        port=port,
+        log_level="info",
+    )
+
+
+@app.command()
+def steer(
+    prompt: str = typer.Argument(..., help="The prompt to generate from"),
+    model: str = typer.Option("gemma-2-2b", "--model", "-m", help="Model to use"),
+    preset: Optional[str] = typer.Option(None, "--preset", "-p", help="Preset to apply"),
+    creativity: float = typer.Option(0.0, help="Creativity slider (-1 to 1)"),
+    formality: float = typer.Option(0.0, help="Formality slider (-1 to 1)"),
+    humor: float = typer.Option(0.0, help="Humor slider (-1 to 1)"),
+    confidence: float = typer.Option(0.0, help="Confidence slider (-1 to 1)"),
+    verbosity: float = typer.Option(0.0, help="Verbosity slider (-1 to 1)"),
+    empathy: float = typer.Option(0.0, help="Empathy slider (-1 to 1)"),
+    technical: float = typer.Option(0.0, help="Technical slider (-1 to 1)"),
+    max_tokens: int = typer.Option(256, help="Maximum tokens to generate"),
+    temperature: float = typer.Option(0.7, help="Sampling temperature"),
+):
+    """Generate text with personality steering."""
+    from schism.engine.generate import generate_sync
+    from schism.presets.manager import get_preset
+
+    # Build sliders from preset or flags
+    sliders = {}
+    if preset:
+        preset_data = get_preset(preset)
+        if preset_data is None:
+            console.print(f"[red]Preset '{preset}' not found[/red]")
+            raise typer.Exit(1)
+        sliders = preset_data["sliders"]
+        console.print(f"[dim]Using preset: {preset_data['name']}[/dim]")
+    else:
+        # Use individual slider flags
+        slider_map = {
+            "creativity": creativity,
+            "formality": formality,
+            "humor": humor,
+            "confidence": confidence,
+            "verbosity": verbosity,
+            "empathy": empathy,
+            "technical": technical,
+        }
+        sliders = {k: v for k, v in slider_map.items() if abs(v) > 0.01}
+
+    if not sliders:
+        console.print("[yellow]No sliders set - output will be unsteered[/yellow]")
+
+    # Show active sliders
+    if sliders:
+        slider_text = " | ".join(
+            f"[cyan]{k}[/cyan]={v:+.1f}" for k, v in sliders.items() if abs(v) > 0.01
+        )
+        console.print(f"[dim]Sliders: {slider_text}[/dim]")
+
+    console.print(f"[dim]Model: {model} | Loading...[/dim]")
+
+    result = generate_sync(
+        model_name=model,
+        prompt=prompt,
+        sliders=sliders,
+        max_tokens=max_tokens,
+        temperature=temperature,
+    )
+
+    console.print()
+    console.print(Panel(result, title="[bold]Steered Output[/bold]", border_style="green"))
+
+
+@app.command()
+def compare(
+    prompt: str = typer.Argument(..., help="The prompt to compare"),
+    model: str = typer.Option("gemma-2-2b", "--model", "-m", help="Model to use"),
+    preset: Optional[str] = typer.Option(None, "--preset", "-p", help="Preset to apply"),
+    max_tokens: int = typer.Option(256, help="Maximum tokens to generate"),
+):
+    """Side-by-side comparison of steered vs vanilla output."""
+    from schism.engine.generate import generate_sync
+    from schism.presets.manager import get_preset
+
+    sliders = {}
+    if preset:
+        preset_data = get_preset(preset)
+        if preset_data is None:
+            console.print(f"[red]Preset '{preset}' not found[/red]")
+            raise typer.Exit(1)
+        sliders = preset_data["sliders"]
+        console.print(f"[dim]Comparing with preset: {preset_data['name']}[/dim]")
+
+    console.print(f"[dim]Model: {model} | Loading...[/dim]")
+
+    # Generate both
+    console.print("[dim]Generating vanilla response...[/dim]")
+    vanilla = generate_sync(model, prompt, {}, max_tokens=max_tokens)
+
+    console.print("[dim]Generating steered response...[/dim]")
+    steered = generate_sync(model, prompt, sliders, max_tokens=max_tokens)
+
+    # Display side by side
+    console.print()
+    console.print(Columns([
+        Panel(vanilla, title="[bold]Vanilla[/bold]", border_style="blue", width=50),
+        Panel(steered, title="[bold]Steered[/bold]", border_style="green", width=50),
+    ]))
+
+
+@app.command()
+def download(
+    model: str = typer.Argument(..., help="Model to download (e.g. gemma-2-2b)"),
+):
+    """Download a model and its SAE weights."""
+    from schism.engine.loader import load_model, MODEL_REGISTRY
+
+    if model not in MODEL_REGISTRY:
+        console.print(f"[red]Unknown model: {model}[/red]")
+        console.print(f"Available: {', '.join(MODEL_REGISTRY.keys())}")
+        raise typer.Exit(1)
+
+    console.print(f"[bold]Downloading {model}...[/bold]")
+    console.print("[dim]This may take a while on first run.[/dim]")
+
+    with console.status(f"Loading {model}..."):
+        load_model(model)
+
+    console.print(f"[green]Model {model} is ready![/green]")
+
+
+# --- Preset subcommands ---
+
+
+@presets_app.command("list")
+def presets_list():
+    """List all available presets."""
+    from schism.presets.manager import list_presets
+
+    presets = list_presets()
+    if not presets:
+        console.print("[dim]No presets found[/dim]")
+        return
+
+    table = Table(title="Personality Presets")
+    table.add_column("Name", style="bold cyan")
+    table.add_column("Description")
+    table.add_column("Source", style="dim")
+    table.add_column("Sliders")
+
+    for p in presets:
+        active = [f"{k}={v:+.1f}" for k, v in p["sliders"].items() if abs(v) > 0.01]
+        table.add_row(
+            p["name"],
+            p.get("description", ""),
+            p.get("source", "user"),
+            ", ".join(active[:4]) + ("..." if len(active) > 4 else ""),
+        )
+
+    console.print(table)
+
+
+@presets_app.command("show")
+def presets_show(name: str = typer.Argument(..., help="Preset name")):
+    """Show details of a specific preset."""
+    from schism.presets.manager import get_preset
+
+    preset = get_preset(name)
+    if not preset:
+        console.print(f"[red]Preset '{name}' not found[/red]")
+        raise typer.Exit(1)
+
+    console.print(Panel.fit(
+        f"[bold]{preset['name']}[/bold]\n"
+        f"[dim]{preset.get('description', '')}[/dim]\n"
+        f"Model: {preset.get('model', 'any')}\n",
+        border_style="cyan",
+    ))
+
+    for feature, value in preset["sliders"].items():
+        bar_width = 20
+        center = bar_width // 2
+        filled = int((value + 1) / 2 * bar_width)
+        bar = "░" * bar_width
+        bar = bar[:filled] + "█" + bar[filled + 1:]
+        color = "green" if value > 0 else "red" if value < 0 else "dim"
+        console.print(f"  {feature:>12s}  [{color}]{bar}[/{color}]  {value:+.1f}")
+
+
+def main():
+    app()
