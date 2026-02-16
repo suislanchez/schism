@@ -21,6 +21,12 @@ dependencies = [
     "websockets>=12.0",
 ]
 
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0",
+    "httpx>=0.24.0",
+]
+
 [project.scripts]
 schism = "schism.cli:main"
 
@@ -29,3 +35,14 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 schism = ["static/**/*", "presets/defaults/*.json"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

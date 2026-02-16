@@ -23,6 +23,9 @@ console = Console()
 presets_app = typer.Typer(help="Manage personality presets")
 app.add_typer(presets_app, name="presets")
 
+features_app = typer.Typer(help="Manage steering features (slider dimensions)")
+app.add_typer(features_app, name="features")
+
 
 @app.callback(invoke_without_command=True)
 def default(ctx: typer.Context):
@@ -342,6 +345,152 @@ def presets_show(name: str = typer.Argument(..., help="Preset name")):
         bar = bar[:filled] + "█" + bar[filled + 1:]
         color = "green" if value > 0 else "red" if value < 0 else "dim"
         console.print(f"  {feature:>12s}  [{color}]{bar}[/{color}]  {value:+.1f}")
+
+
+# --- Feature subcommands ---
+
+
+@features_app.command("list")
+def features_list():
+    """List all available steering features (slider dimensions)."""
+    from schism.engine.features import get_all_features, DEFAULT_FEATURES, load_custom_features
+
+    table = Table(title="Steering Features")
+    table.add_column("Name", style="bold cyan")
+    table.add_column("Description")
+    table.add_column("Source", style="dim")
+    table.add_column("Prompts", justify="center")
+
+    defaults = set(DEFAULT_FEATURES.keys())
+    customs = load_custom_features()
+
+    for name in sorted(defaults | set(customs.keys())):
+        feat = DEFAULT_FEATURES.get(name) or customs.get(name)
+        source = "default" if name in defaults else "custom"
+        n_prompts = len(feat.get("positive", []))
+        table.add_row(name, feat["description"], source, str(n_prompts))
+
+    console.print(table)
+
+
+@features_app.command("create")
+def features_create(
+    name: str = typer.Argument(..., help="Feature name (e.g. 'poetry', 'aggression')"),
+    description: str = typer.Option(..., "--desc", "-d", help="What this feature controls"),
+):
+    """Create a custom steering feature with your own contrastive prompts.
+
+    You'll be asked to enter positive prompts (behavior you want MORE of)
+    and negative prompts (behavior you want LESS of). At least 3 of each
+    are recommended for good results.
+    """
+    from schism.engine.features import save_custom_feature, get_feature_info
+
+    # Check if already exists
+    if get_feature_info(name):
+        console.print(f"[yellow]Feature '{name}' already exists. This will overwrite it.[/yellow]")
+
+    console.print(f"\n[bold]Creating feature: {name}[/bold]")
+    console.print(f"[dim]{description}[/dim]\n")
+
+    # Collect positive prompts
+    console.print("[green]Positive prompts[/green] (behavior you want MORE of)")
+    console.print("[dim]Enter one prompt per line. Empty line to finish. Min 3 recommended.[/dim]\n")
+
+    positive = []
+    while True:
+        try:
+            line = input(f"  + ({len(positive) + 1}) ").strip()
+        except (EOFError, KeyboardInterrupt):
+            console.print()
+            break
+        if not line:
+            break
+        positive.append(line)
+
+    if len(positive) < 2:
+        console.print("[red]Need at least 2 positive prompts[/red]")
+        raise typer.Exit(1)
+
+    # Collect negative prompts
+    console.print(f"\n[red]Negative prompts[/red] (behavior you want LESS of)")
+    console.print("[dim]Enter one prompt per line. Empty line to finish. Min 3 recommended.[/dim]\n")
+
+    negative = []
+    while True:
+        try:
+            line = input(f"  - ({len(negative) + 1}) ").strip()
+        except (EOFError, KeyboardInterrupt):
+            console.print()
+            break
+        if not line:
+            break
+        negative.append(line)
+
+    if len(negative) < 2:
+        console.print("[red]Need at least 2 negative prompts[/red]")
+        raise typer.Exit(1)
+
+    # Save
+    feature_def = {
+        "description": description,
+        "positive": positive,
+        "negative": negative,
+    }
+    save_custom_feature(name, feature_def)
+
+    console.print(f"\n[green]Feature '{name}' created![/green]")
+    console.print(f"  {len(positive)} positive prompts, {len(negative)} negative prompts")
+    console.print(f"[dim]It will now appear as a slider in the web UI and can be used in presets.[/dim]")
+
+
+@features_app.command("delete")
+def features_delete(
+    name: str = typer.Argument(..., help="Feature name to delete"),
+):
+    """Delete a custom feature. Cannot delete built-in features."""
+    from schism.engine.features import DEFAULT_FEATURES
+    from schism.engine.loader import FEATURES_DIR
+
+    if name in DEFAULT_FEATURES:
+        console.print(f"[red]Cannot delete built-in feature '{name}'[/red]")
+        raise typer.Exit(1)
+
+    path = FEATURES_DIR / f"{name}.json"
+    if not path.exists():
+        console.print(f"[red]Custom feature '{name}' not found[/red]")
+        raise typer.Exit(1)
+
+    path.unlink()
+    console.print(f"[green]Deleted custom feature '{name}'[/green]")
+
+
+@features_app.command("show")
+def features_show(
+    name: str = typer.Argument(..., help="Feature name"),
+):
+    """Show details of a steering feature."""
+    from schism.engine.features import get_all_features
+
+    features = get_all_features()
+    if name not in features:
+        console.print(f"[red]Feature '{name}' not found[/red]")
+        raise typer.Exit(1)
+
+    feat = features[name]
+    console.print(Panel.fit(
+        f"[bold]{name}[/bold]\n"
+        f"[dim]{feat['description']}[/dim]",
+        border_style="cyan",
+    ))
+
+    console.print("\n[green]Positive prompts (more of this):[/green]")
+    for i, p in enumerate(feat["positive"], 1):
+        console.print(f"  {i}. {p}")
+
+    console.print("\n[red]Negative prompts (less of this):[/red]")
+    for i, p in enumerate(feat["negative"], 1):
+        console.print(f"  {i}. {p}")
 
 
 def main():
