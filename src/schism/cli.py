@@ -265,6 +265,58 @@ def presets_list():
     console.print(table)
 
 
+@presets_app.command("export")
+def presets_export(
+    name: str = typer.Argument(..., help="Preset name"),
+    output: str = typer.Option(None, "--output", "-o", help="Output file path"),
+):
+    """Export a preset to a JSON file for sharing."""
+    import json
+    from schism.presets.manager import get_preset
+
+    preset = get_preset(name)
+    if not preset:
+        console.print(f"[red]Preset '{name}' not found[/red]")
+        raise typer.Exit(1)
+
+    # Strip internal fields
+    export_data = {
+        "name": preset["name"],
+        "description": preset.get("description", ""),
+        "model": preset.get("model", "any"),
+        "sliders": preset["sliders"],
+        "version": preset.get("version", 1),
+    }
+
+    if output is None:
+        output = f"{preset['name'].lower().replace(' ', '_')}.json"
+
+    with open(output, "w") as f:
+        json.dump(export_data, f, indent=2)
+
+    console.print(f"[green]Exported to {output}[/green]")
+
+
+@app.command()
+def models():
+    """List all available models and their status."""
+    from schism.engine.loader import list_available_models
+
+    table = Table(title="Available Models")
+    table.add_column("Name", style="bold cyan")
+    table.add_column("HuggingFace ID", style="dim")
+    table.add_column("SAE", justify="center")
+    table.add_column("Status", justify="center")
+
+    for m in list_available_models():
+        sae_status = "[green]yes[/green]" if m["has_sae"] else "[dim]no (contrastive)[/dim]"
+        load_status = "[green]loaded[/green]" if m["loaded"] else "[dim]not loaded[/dim]"
+        table.add_row(m["name"], m["hf_id"], sae_status, load_status)
+
+    console.print(table)
+    console.print("\n[dim]Use 'schism download <model>' to download a model[/dim]")
+
+
 @presets_app.command("show")
 def presets_show(name: str = typer.Argument(..., help="Preset name")):
     """Show details of a specific preset."""

@@ -5,11 +5,14 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- State ---
     let generating = false;
+    let modelLoading = false;
     let compareMode = false;
 
     // --- Elements ---
     const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
     const modelSelect = document.getElementById('model-select');
+    const loadModelBtn = document.getElementById('load-model-btn');
     const promptInput = document.getElementById('prompt-input');
     const generateBtn = document.getElementById('generate-btn');
     const compareToggle = document.getElementById('compare-toggle');
@@ -46,14 +49,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Init WebSocket ---
     const socket = new SchismSocket();
 
-    socket.onStatusChange = (status) => {
+    function setStatus(status, text) {
         statusDot.className = 'status-dot ' + status;
+        if (statusText) statusText.textContent = text || '';
+    }
+
+    socket.onStatusChange = (status) => {
+        if (status === 'connected') setStatus('connected', 'Connected');
+        else if (status === 'error') setStatus('error', 'Disconnected');
+        else setStatus(status, status);
     };
 
     socket.onStart = (data) => {
         generating = true;
         generateBtn.textContent = 'Generating...';
         generateBtn.disabled = true;
+        generateBtn.classList.add('generating');
 
         steeredBody.textContent = '';
         steeredBody.classList.remove('empty');
@@ -68,15 +79,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     socket.onToken = (token, side) => {
         const target = side === 'vanilla' ? vanillaBody : steeredBody;
-        // Remove cursor, append token, re-add cursor
         const cursor = target.querySelector('.cursor');
         if (cursor) cursor.remove();
         target.appendChild(document.createTextNode(token));
         const newCursor = document.createElement('span');
         newCursor.className = 'cursor';
         target.appendChild(newCursor);
-
-        // Auto-scroll
         target.scrollTop = target.scrollHeight;
     };
 
@@ -84,8 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
         generating = false;
         generateBtn.textContent = 'Generate';
         generateBtn.disabled = false;
-
-        // Remove cursors
+        generateBtn.classList.remove('generating');
         document.querySelectorAll('.cursor').forEach(c => c.remove());
     };
 
@@ -93,11 +100,50 @@ document.addEventListener('DOMContentLoaded', () => {
         generating = false;
         generateBtn.textContent = 'Generate';
         generateBtn.disabled = false;
+        generateBtn.classList.remove('generating');
         document.querySelectorAll('.cursor').forEach(c => c.remove());
         showToast(err, 'error');
     };
 
     socket.connect();
+
+    // --- Model Loading ---
+    loadModelBtn.addEventListener('click', async () => {
+        if (modelLoading) return;
+        const model = modelSelect.value;
+
+        modelLoading = true;
+        loadModelBtn.textContent = 'Loading...';
+        loadModelBtn.disabled = true;
+        generateBtn.disabled = true;
+        setStatus('loading', `Loading ${model}...`);
+
+        try {
+            const resp = await fetch('/api/load-model', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model }),
+            });
+            const data = await resp.json();
+
+            if (resp.ok) {
+                showToast(`Model ${model} loaded`, 'success');
+                setStatus('connected', `${model} ready`);
+                await loadModels(); // Refresh model list
+            } else {
+                showToast(data.error || 'Failed to load model', 'error');
+                setStatus('error', 'Load failed');
+            }
+        } catch (err) {
+            showToast('Failed to load model: ' + err.message, 'error');
+            setStatus('error', 'Load failed');
+        } finally {
+            modelLoading = false;
+            loadModelBtn.textContent = 'Load';
+            loadModelBtn.disabled = false;
+            generateBtn.disabled = false;
+        }
+    });
 
     // --- Compare Mode Toggle ---
     compareToggle.addEventListener('click', () => {
@@ -113,16 +159,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Start in single mode
     outputArea.classList.add('single');
     vanillaPanel.style.display = 'none';
 
     // --- Generate ---
     function doGenerate() {
-        if (generating) return;
+        if (generating || modelLoading) return;
         const prompt = promptInput.value.trim();
         if (!prompt) {
             showToast('Enter a prompt first', 'error');
+            promptInput.focus();
             return;
         }
 
@@ -143,7 +189,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     generateBtn.addEventListener('click', doGenerate);
 
-    // Ctrl+Enter / Cmd+Enter to generate
     promptInput.addEventListener('keydown', (e) => {
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
             e.preventDefault();
@@ -185,6 +230,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Escape to close modal
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modalOverlay.classList.contains('visible')) {
+            modalOverlay.classList.remove('visible');
+        }
+    });
+
     modalSaveBtn.addEventListener('click', async () => {
         const name = modalNameInput.value.trim();
         if (!name) {
@@ -204,6 +256,11 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast(`Saved preset: ${name}`, 'success');
     });
 
+    // Enter to save in modal
+    modalNameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') modalSaveBtn.click();
+    });
+
     resetBtn.addEventListener('click', () => {
         sliderManager.reset();
         presetSelect.value = '';
@@ -211,19 +268,29 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- Drag & Drop Presets ---
-    document.addEventListener('dragover', (e) => {
+    let dragCounter = 0;
+
+    document.addEventListener('dragenter', (e) => {
         e.preventDefault();
+        dragCounter++;
         dropZone.classList.add('visible');
     });
 
     document.addEventListener('dragleave', (e) => {
-        if (!e.relatedTarget || e.relatedTarget === document.documentElement) {
+        dragCounter--;
+        if (dragCounter <= 0) {
+            dragCounter = 0;
             dropZone.classList.remove('visible');
         }
     });
 
+    document.addEventListener('dragover', (e) => {
+        e.preventDefault();
+    });
+
     document.addEventListener('drop', (e) => {
         e.preventDefault();
+        dragCounter = 0;
         dropZone.classList.remove('visible');
 
         const file = e.dataTransfer.files[0];
@@ -240,10 +307,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     sliderManager.setValues(data.sliders);
                     showToast(`Loaded: ${data.name || file.name}`, 'success');
                 } else {
-                    showToast('Invalid preset file', 'error');
+                    showToast('Invalid preset file - no sliders found', 'error');
                 }
             } catch {
-                showToast('Failed to parse JSON', 'error');
+                showToast('Failed to parse JSON file', 'error');
             }
         };
         reader.readAsText(file);
@@ -251,16 +318,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Load Models ---
     async function loadModels() {
-        const resp = await fetch('/api/models');
-        const models = await resp.json();
-        modelSelect.innerHTML = '';
-        for (const m of models) {
-            const opt = document.createElement('option');
-            opt.value = m.name;
-            opt.textContent = m.name + (m.loaded ? ' (loaded)' : '');
-            modelSelect.appendChild(opt);
+        try {
+            const resp = await fetch('/api/models');
+            const models = await resp.json();
+            modelSelect.innerHTML = '';
+            for (const m of models) {
+                const opt = document.createElement('option');
+                opt.value = m.name;
+                opt.textContent = m.name;
+                if (m.loaded) {
+                    opt.textContent += ' (loaded)';
+                    opt.dataset.loaded = 'true';
+                }
+                modelSelect.appendChild(opt);
+            }
+
+            // Update load button text based on selection
+            updateLoadButton();
+        } catch {
+            showToast('Failed to fetch models', 'error');
         }
     }
+
+    function updateLoadButton() {
+        const selected = modelSelect.selectedOptions[0];
+        if (selected && selected.dataset.loaded === 'true') {
+            loadModelBtn.textContent = 'Loaded';
+            loadModelBtn.classList.add('loaded');
+        } else {
+            loadModelBtn.textContent = 'Load';
+            loadModelBtn.classList.remove('loaded');
+        }
+    }
+
+    modelSelect.addEventListener('change', updateLoadButton);
 
     // --- Toast ---
     function showToast(message, type = 'info') {
@@ -280,10 +371,12 @@ document.addEventListener('DOMContentLoaded', () => {
         await sliderManager.loadFeatures();
         await loadPresets();
         await loadModels();
+        setStatus('connected', 'Ready');
     }
 
     init().catch(err => {
         console.error('Init failed:', err);
         showToast('Failed to connect to server', 'error');
+        setStatus('error', 'Not connected');
     });
 });
