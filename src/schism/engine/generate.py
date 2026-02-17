@@ -85,6 +85,18 @@ def generate_sync(
     top_p: float = 0.9,
 ) -> str:
     """Synchronous generation with steering. Returns full text."""
+    tokens = list(generate_sync_stream(model_name, prompt, sliders, max_tokens, temperature))
+    return "".join(tokens)
+
+
+def generate_sync_stream(
+    model_name: str,
+    prompt: str,
+    sliders: dict[str, float],
+    max_tokens: int = 256,
+    temperature: float = 0.7,
+):
+    """Synchronous streaming generation with steering. Yields tokens one at a time."""
     model_data = load_model(model_name)
     model = model_data["model"]
     tokenizer = model_data["tokenizer"]
@@ -95,21 +107,28 @@ def generate_sync(
 
     inputs = tokenizer(prompt, return_tensors="pt")
     inputs = {k: v.to(device) for k, v in inputs.items()}
-    input_len = inputs["input_ids"].shape[1]
+    input_ids = inputs["input_ids"]
 
     with apply_steering(model, vectors, layer_idx):
-        with torch.no_grad():
-            outputs = model.generate(
-                **inputs,
-                max_new_tokens=max_tokens,
-                temperature=temperature,
-                top_p=top_p,
-                do_sample=True,
-                pad_token_id=tokenizer.pad_token_id,
-            )
+        for _ in range(max_tokens):
+            with torch.no_grad():
+                outputs = model(input_ids=input_ids)
+                logits = outputs.logits[:, -1, :]
 
-    generated = outputs[0][input_len:]
-    return tokenizer.decode(generated, skip_special_tokens=True)
+                if temperature > 0:
+                    logits = logits / temperature
+                    probs = torch.softmax(logits, dim=-1)
+                    next_token = torch.multinomial(probs, num_samples=1)
+                else:
+                    next_token = logits.argmax(dim=-1, keepdim=True)
+
+            if next_token.item() == tokenizer.eos_token_id:
+                break
+
+            token_text = tokenizer.decode(next_token[0], skip_special_tokens=True)
+            yield token_text
+
+            input_ids = torch.cat([input_ids, next_token], dim=-1)
 
 
 async def generate_stream(

@@ -89,6 +89,19 @@ Models with SAE support use Sparse Autoencoders for more interpretable steering.
 
 Based on research from [Arditi et al. 2024](https://arxiv.org/abs/2406.11717) and [FGAA (2025)](https://arxiv.org/abs/2501.09929).
 
+## Docker
+
+```bash
+docker build -t schism .
+docker run -p 6660:6660 schism
+```
+
+For GPU support:
+
+```bash
+docker run --gpus all -p 6660:6660 schism
+```
+
 ## Development
 
 ```bash

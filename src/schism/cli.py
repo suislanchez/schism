@@ -77,7 +77,9 @@ def steer(
     temperature: float = typer.Option(0.7, help="Sampling temperature"),
 ):
     """Generate text with personality steering."""
-    from schism.engine.generate import generate_sync
+    import sys
+
+    from schism.engine.generate import generate_sync_stream
     from schism.presets.manager import get_preset
 
     # Build sliders from preset or flags
@@ -113,17 +115,22 @@ def steer(
         console.print(f"[dim]Sliders: {slider_text}[/dim]")
 
     console.print(f"[dim]Model: {model} | Loading...[/dim]")
+    console.print()
 
-    result = generate_sync(
+    # Stream tokens as they're generated
+    console.print("[bold]Steered Output[/bold]", style="green")
+    console.print("─" * 40, style="dim")
+    for token in generate_sync_stream(
         model_name=model,
         prompt=prompt,
         sliders=sliders,
         max_tokens=max_tokens,
         temperature=temperature,
-    )
-
-    console.print()
-    console.print(Panel(result, title="[bold]Steered Output[/bold]", border_style="green"))
+    ):
+        sys.stdout.write(token)
+        sys.stdout.flush()
+    sys.stdout.write("\n")
+    console.print("─" * 40, style="dim")
 
 
 @app.command()
